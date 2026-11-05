@@ -4,14 +4,14 @@
   "description": "The Excel engine for AI agents — TypeScript client for the Basis xlsx parsing API: typed records, inline or async job, streaming, webhooks.",
   "license": "Apache-2.0",
   "author": "Basis",
-  "homepage": "https://github.com/basis1-tech/basis-oss/tree/main/sdk#readme",
+  "homepage": "https://github.com/basis1tech/basis-oss/tree/main/sdk#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/basis1-tech/basis-oss.git",
+    "url": "git+https://github.com/basis1tech/basis-oss.git",
     "directory": "sdk"
   },
   "bugs": {
-    "url": "https://github.com/basis1-tech/basis-oss/issues"
+    "url": "https://github.com/basis1tech/basis-oss/issues"
   },
   "keywords": [
     "basis",

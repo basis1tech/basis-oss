@@ -4,14 +4,14 @@
   "description": "The Excel engine for AI agents — MCP server for Basis: parse Excel workbooks, evaluate formulas and work with workbook sessions from Claude, Cursor and other MCP clients.",
   "license": "Apache-2.0",
   "author": "Basis",
-  "homepage": "https://github.com/basis1-tech/basis-oss/tree/main/mcp#readme",
+  "homepage": "https://github.com/basis1tech/basis-oss/tree/main/mcp#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/basis1-tech/basis-oss.git",
+    "url": "git+https://github.com/basis1tech/basis-oss.git",
     "directory": "mcp"
   },
   "bugs": {
-    "url": "https://github.com/basis1-tech/basis-oss/issues"
+    "url": "https://github.com/basis1tech/basis-oss/issues"
   },
   "keywords": [
     "mcp",

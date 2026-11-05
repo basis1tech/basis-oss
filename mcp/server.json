@@ -5,7 +5,7 @@
   "description": "The Excel engine for AI agents: read, check and edit Excel models over MCP.",
   "websiteUrl": "https://basis1.tech",
   "repository": {
-    "url": "https://github.com/basis1-tech/basis-oss",
+    "url": "https://github.com/basis1tech/basis-oss",
     "source": "github",
     "subfolder": "mcp"
   },

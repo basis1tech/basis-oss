@@ -23,7 +23,7 @@ Environment:
   BASIS_MCP_MAX_FETCH_BYTES  Size limit when a tool fetches a workbook from a URL (default 200000000)
 
 Every tool runs on the Basis API: workbooks you pass are uploaded to it.
-Docs: https://github.com/basis1-tech/basis-oss/tree/main/mcp#readme
+Docs: https://github.com/basis1tech/basis-oss/tree/main/mcp#readme
 `;
 
 export function log(level: "info" | "warn" | "error", message: string): void {

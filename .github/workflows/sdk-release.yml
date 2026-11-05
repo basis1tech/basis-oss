@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   test:
-    if: github.repository == 'basis1-tech/basis-oss'
+    if: github.repository == 'basis1tech/basis-oss'
     uses: ./.github/workflows/sdk-ci.yml
 
   publish:
