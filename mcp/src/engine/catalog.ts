@@ -3,6 +3,7 @@
 // (hosted.ts) both register from this catalog, so the tools a client sees
 // stay the same whichever engine runs them; only the "where it runs" note in
 // each description differs.
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 
 export type EngineMode = "local" | "hosted";
@@ -383,3 +384,56 @@ export function clientSchemaFor(name: EngineToolName, mode: EngineMode): ZodRawS
 export function toolsFor(mode: EngineMode): EngineToolName[] {
   return ENGINE_TOOL_NAMES.filter((n) => mode === "local" || engineTools[n].hosted);
 }
+
+const read: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };
+const readExternal: ToolAnnotations = { readOnlyHint: true, openWorldHint: true };
+const write = (destructive: boolean, idempotent: boolean, openWorld = false): ToolAnnotations => ({
+  readOnlyHint: false,
+  destructiveHint: destructive,
+  idempotentHint: idempotent,
+  openWorldHint: openWorld,
+});
+
+/**
+ * Hints that let a client tell a read from a write without asking. A tool
+ * that can save a file with output_path counts as a write that may replace a
+ * file (only with overwrite: true). Kept in step with the hosted server's
+ * server/mcp-annotations.js, which has no output_path.
+ */
+const toolAnnotations: Record<EngineToolName, ToolAnnotations> = {
+  evaluate_formula: read,
+  create_session: write(false, false, true),
+  close_session: write(true, true),
+  list_sessions: read,
+  add_sheet: write(false, false),
+  rename_sheet: write(false, true),
+  set_inputs: write(true, true),
+  set_calc_settings: write(false, true),
+  get_outputs: read,
+  define_variable: write(true, true),
+  inspect_model: read,
+  get_cell_formula: read,
+  trace_dependencies: read,
+  audit_workbook: read,
+  get_formula_range: read,
+  commit_session: write(false, false),
+  restore_session: write(true, true),
+  snapshot_session: write(true, false),
+  export_workbook: write(true, true),
+  recalc_workbook: write(true, true, true),
+  save_to_library: write(false, false, true),
+};
+
+/** The annotations a client sees for a workbook tool. */
+export function annotationsFor(name: EngineToolName): ToolAnnotations {
+  return toolAnnotations[name];
+}
+
+/** Annotations for the parse tools in api-tools.ts. */
+export const apiToolAnnotations = {
+  parse_workbook: readExternal,
+  submit_job: write(false, false, true),
+  get_job_status: read,
+  stream_job: read,
+  diff_workbooks: readExternal,
+} as const satisfies Record<string, ToolAnnotations>;

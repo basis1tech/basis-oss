@@ -46,6 +46,11 @@ describe("stdio server (dist/index.js)", () => {
     for (const n of ["parse_workbook", "diff_workbooks", "evaluate_formula", "create_session", "save_to_library", "rename_sheet", "export_workbook", "recalc_workbook"]) {
       assert.ok(names.includes(n), n);
     }
+    type Listed = { name: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } };
+    const tools: Listed[] = list!.result.tools;
+    assert.deepEqual(tools.filter((t) => typeof t.annotations?.readOnlyHint !== "boolean").map((t) => t.name), []);
+    assert.equal(tools.find((t) => t.name === "get_outputs")!.annotations!.readOnlyHint, true);
+    assert.equal(tools.find((t) => t.name === "close_session")!.annotations!.destructiveHint, true);
     assert.match(r.stderr, /ready: 26 tools; workbook tools run on hosted/);
     assert.ok(!r.stderr.includes(GOOD_KEY), "the key must never be logged");
     assert.equal(r.code, 0);

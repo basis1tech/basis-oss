@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Basis } from "@basis1/parse";
 import { registerApiTools } from "./api-tools.ts";
 import { MISSING_KEY_MESSAGE, type Config } from "./config.ts";
-import { clientSchemaFor, describeTool, engineTools } from "./engine/catalog.ts";
+import { annotationsFor, clientSchemaFor, describeTool, engineTools } from "./engine/catalog.ts";
 import type { Engine } from "./engine/engine.ts";
 import { withOutputFile } from "./engine/output.ts";
 
@@ -38,6 +38,7 @@ export function createServer(deps: ServerDeps): McpServer {
         title: engineTools[name].title,
         description: describeTool(name, deps.engine.mode),
         inputSchema: clientSchemaFor(name, deps.engine.mode),
+        annotations: annotationsFor(name),
       },
       (args: Record<string, unknown>) => withOutputFile(args, (forward) => deps.engine.call(name, forward)),
     );
