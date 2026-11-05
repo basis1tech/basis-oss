@@ -1,0 +1,136 @@
+name: sdk-release
+
+# Publishes the TypeScript SDK (sdk/) to npm. Nothing here runs by accident:
+#
+#   - It triggers only on a pushed tag `sdk-v<version>` or a manual dispatch,
+#     and a manual dispatch is a dry run unless `dry_run` is unticked AND it
+#     was started from an `sdk-v*` tag.
+#   - The tag must equal sdk/package.json's version.
+#   - The full sdk-ci workflow (unit, contract, pack smoke) runs first.
+#   - sdk/scripts/check-publishable.mjs refuses while the SDK license is the
+#     placeholder or the name is still in the @basis scope we don't own.
+#   - The publish job runs in the `npm-publish` environment. Add required
+#     reviewers to it (Settings -> Environments) so a person approves each
+#     release.
+#
+# Credentials, in order of preference:
+#   1. npm trusted publishing (OIDC): configure this repository and workflow
+#      file as a trusted publisher in the package's npm settings. No secret.
+#      Needs npm >= 11.5.1, installed below.
+#   2. An `NPM_TOKEN` secret on the `npm-publish` environment: a granular
+#      access token limited to this package. Needed for the very first
+#      publish, since npm only offers trusted publishing for a package that
+#      already exists. Delete it once trusted publishing is set up.
+#
+# Provenance (`--provenance`) is added only when the repository is public:
+# npm can't attest builds from a private repository.
+
+on:
+  push:
+    tags: ["sdk-v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build, test and show what would be published, without publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.repository == 'basis1-tech/basis-oss'
+    uses: ./.github/workflows/sdk-ci.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing and provenance
+    defaults:
+      run:
+        working-directory: sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@^11.5.1 && npm --version
+
+      - name: Decide whether this run publishes
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          REF: ${{ github.ref }}
+        run: |
+          publish=false
+          if [ "$EVENT" = "push" ]; then
+            publish=true
+          elif [ "$DRY_RUN_INPUT" = "false" ]; then
+            case "$REF" in
+              refs/tags/sdk-v*) publish=true ;;
+              *) echo "::error::A real publish must be dispatched from an sdk-v* tag, not $REF"; exit 1 ;;
+            esac
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $publish"
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/sdk-v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "sdk-v$version" ]; then
+            echo "::error::Tag $TAG doesn't match sdk/package.json version $version (expected sdk-v$version)"
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Show the tarball contents
+        run: npm pack --dry-run
+
+      - name: Check owner decisions are made (license, package name)
+        if: steps.mode.outputs.publish == 'true'
+        run: node scripts/check-publishable.mjs
+
+      - name: Report open owner decisions (dry run only)
+        if: steps.mode.outputs.publish != 'true'
+        run: node scripts/check-publishable.mjs || echo "::warning::Not publishable yet; see the messages above"
+
+      - name: Publish
+        if: steps.mode.outputs.publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PRIVATE_REPO: ${{ github.event.repository.private }}
+        run: |
+          flags="--access public"
+          if [ "$PRIVATE_REPO" = "false" ]; then flags="$flags --provenance"; fi
+          # prepack already built dist; prepublishOnly re-runs the decision check.
+          npm publish $flags
+
+      # npm refuses an already-published version even with --dry-run, and
+      # main sits at the released version between releases.
+      - name: Publish (dry run)
+        if: steps.mode.outputs.publish != 'true'
+        run: |
+          spec="$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")"
+          if [ -n "$(npm view "$spec" version 2>/dev/null)" ]; then
+            echo "::notice::$spec is already on npm, so there's nothing new to dry-run publish. Bump the version to rehearse the next release."
+            exit 0
+          fi
+          npm publish --dry-run --ignore-scripts --access public

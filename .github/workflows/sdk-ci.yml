@@ -8,10 +8,12 @@ on:
     paths:
       - "sdk/**"
       - ".github/workflows/sdk-ci.yml"
+      - ".github/workflows/sdk-release.yml"
   push:
     branches: [main]
     paths:
       - "sdk/**"
+  workflow_call: {}
 
 permissions:
   contents: read

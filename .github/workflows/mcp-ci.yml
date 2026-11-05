@@ -9,11 +9,13 @@ on:
       - "sdk/**"
       - "mcp/**"
       - ".github/workflows/mcp-ci.yml"
+      - ".github/workflows/mcp-release.yml"
   push:
     branches: [main]
     paths:
       - "sdk/**"
       - "mcp/**"
+  workflow_call: {}
 
 permissions:
   contents: read
