@@ -4,18 +4,34 @@
   "title": "Basis",
   "description": "The Excel engine for AI agents: read, check and edit Excel models over MCP.",
   "websiteUrl": "https://basis1.tech",
+  "icons": [
+    {
+      "src": "https://basis1.tech/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    },
+    {
+      "src": "https://basis1.tech/apple-icon.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "180x180"
+      ]
+    }
+  ],
   "repository": {
     "url": "https://github.com/basis1tech/basis-oss",
     "source": "github",
     "subfolder": "mcp"
   },
-  "version": "0.2.0",
+  "version": "0.2.1",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@basis1/mcp",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
