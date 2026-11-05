@@ -1,0 +1,5 @@
+{
+  "secret": "whsec_test_only",
+  "body": "{\"job_id\":\"job-1\",\"status\":\"completed\",\"records_out\":42,\"error\":null}",
+  "signature": "sha256=e4312871d98c152f64071ebe1a41a19f087ee4e3494c0435b82b8e419692e9da"
+}

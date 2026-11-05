@@ -1,0 +1,83 @@
+name: mcp-ci
+
+# Tests for the MCP server package (mcp/, published as @basis1/mcp). Runs on
+# PRs that touch it or the SDK it depends on (sdk/).
+
+on:
+  pull_request:
+    paths:
+      - "sdk/**"
+      - "mcp/**"
+      - ".github/workflows/mcp-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "sdk/**"
+      - "mcp/**"
+
+permissions:
+  contents: read
+
+jobs:
+  mcp:
+    name: mcp (typecheck, tests, stdio handshake, pack smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build the SDK (linked as file:../sdk)
+        working-directory: sdk
+        run: npm ci && npm run build
+
+      - name: Install
+        working-directory: mcp
+        run: npm ci
+
+      - name: Typecheck and bundle
+        working-directory: mcp
+        run: npm run build
+
+      - name: Tests (unit, hosted forwarding, stdio handshake)
+        working-directory: mcp
+        run: npm test
+
+      - name: Pack, install into a fresh project, MCP handshake through the bin and npx
+        working-directory: mcp
+        run: npm run test:pack
+
+  mcp-node-compat:
+    name: mcp install smoke (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # engines.node is >=20.19.0; 24 is covered by the job above.
+        node: ["20.19", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install the SDK and mcp
+        run: (cd sdk && npm ci) && (cd mcp && npm ci)
+      - name: Pack, install, MCP handshake
+        working-directory: mcp
+        run: npm run test:pack
+
+  mcp-windows:
+    name: mcp install smoke (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the SDK and mcp
+        shell: bash
+        run: (cd sdk && npm ci) && (cd mcp && npm ci)
+      - name: Pack, install, MCP handshake
+        working-directory: mcp
+        run: npm run test:pack

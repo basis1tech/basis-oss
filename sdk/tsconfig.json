@@ -1,0 +1,27 @@
+{
+  // Builds the published library. No Node types: the library must only use
+  // web-standard globals (fetch, Blob, AbortSignal, ReadableStream, Web
+  // Crypto) so it runs in browsers and edge runtimes. The one Node API it
+  // touches, `fs.openAsBlob` for path inputs, is imported lazily and typed by
+  // hand in src/input.ts.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+    "types": [],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts"]
+}

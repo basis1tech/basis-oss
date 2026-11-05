@@ -1,0 +1,64 @@
+{
+  "name": "@basis1/parse",
+  "version": "0.2.0",
+  "description": "The Excel engine for AI agents — TypeScript client for the Basis xlsx parsing API: typed records, inline or async job, streaming, webhooks.",
+  "license": "Apache-2.0",
+  "author": "Basis",
+  "homepage": "https://github.com/basis1-tech/basis-oss/tree/main/sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basis1-tech/basis-oss.git",
+    "directory": "sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/basis1-tech/basis-oss/issues"
+  },
+  "keywords": [
+    "basis",
+    "xlsx",
+    "excel",
+    "spreadsheet",
+    "workbook",
+    "parser",
+    "formulas",
+    "ndjson",
+    "sdk"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "npm run typecheck && node --test \"test/**/*.test.ts\"",
+    "test:live": "node --test test/live.test.ts",
+    "test:pack": "node scripts/pack-smoke.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "node scripts/check-publishable.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.9.3"
+  }
+}

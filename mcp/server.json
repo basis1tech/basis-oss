@@ -1,0 +1,63 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "tech.basis1/mcp",
+  "title": "Basis",
+  "description": "The Excel engine for AI agents: read, check and edit Excel models over MCP.",
+  "websiteUrl": "https://basis1.tech",
+  "repository": {
+    "url": "https://github.com/basis1-tech/basis-oss",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@basis1/mcp",
+      "version": "0.2.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "BASIS_API_KEY",
+          "description": "Your Basis API key, from https://api.basis1.tech",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "BASIS_BASE_URL",
+          "description": "Basis API base URL, to use a self-hosted server",
+          "isRequired": false,
+          "default": "https://api.basis1.tech",
+          "format": "string"
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.basis1.tech/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer followed by your Basis API key",
+          "value": "Bearer {api_key}",
+          "isRequired": true,
+          "isSecret": true,
+          "variables": {
+            "api_key": {
+              "description": "Your Basis API key",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

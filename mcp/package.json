@@ -1,0 +1,62 @@
+{
+  "name": "@basis1/mcp",
+  "version": "0.2.0",
+  "description": "The Excel engine for AI agents — MCP server for Basis: parse Excel workbooks, evaluate formulas and work with workbook sessions from Claude, Cursor and other MCP clients.",
+  "license": "Apache-2.0",
+  "author": "Basis",
+  "homepage": "https://github.com/basis1-tech/basis-oss/tree/main/mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/basis1-tech/basis-oss.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/basis1-tech/basis-oss/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "excel",
+    "xlsx",
+    "spreadsheet",
+    "workbook",
+    "formulas",
+    "basis"
+  ],
+  "mcpName": "tech.basis1/mcp",
+  "type": "module",
+  "bin": {
+    "basis-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/THIRD_PARTY_LICENSES.txt",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "test:pack": "node scripts/pack-smoke.mjs",
+    "prepack": "node scripts/build.mjs",
+    "prepublishOnly": "node scripts/check-publishable.mjs"
+  },
+  "dependencies": {
+    "@basis1/parse": "file:../sdk"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.24.0",
+    "typescript": "~5.9.3",
+    "zod": "^3.25.76"
+  }
+}

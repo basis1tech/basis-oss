@@ -1,0 +1,13 @@
+{
+  // Typechecks tests (Node runs them directly via type stripping, which does
+  // not typecheck, so `npm test` runs this first).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

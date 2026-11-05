@@ -1,0 +1,25 @@
+{
+  // Typecheck only: scripts/build.mjs bundles src/index.ts with esbuild.
+  // Sources import each other with .ts extensions so the tests run directly
+  // under Node's type stripping.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  // Tests aren't included: tools.test.ts types against the native addon,
+  // which only exists after a Rust build. Node runs them directly.
+  "include": ["src/**/*.ts"]
+}
