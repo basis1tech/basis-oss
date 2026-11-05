@@ -4,6 +4,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Basis } from "@basis1/parse";
+import { apiToolAnnotations } from "./engine/catalog.ts";
 import { countInputs, resolveBytes } from "./input.ts";
 import { errorResult, jsonResult, textResult } from "./results.ts";
 
@@ -39,6 +40,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     "parse_workbook",
     {
       title: "Parse workbook",
+      annotations: apiToolAnnotations.parse_workbook,
       description:
         "Parse an .xlsx workbook on the Basis API and return the full semantic NDJSON output (workbook_meta, sheet, cell, edge, image, image_summary, audit records). Handles small vs. large files transparently. The file is uploaded to the Basis API.",
       inputSchema: workbookInputShape,
@@ -58,6 +60,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     "submit_job",
     {
       title: "Submit parse job",
+      annotations: apiToolAnnotations.submit_job,
       description:
         "Submit an .xlsx workbook to the Basis API for async parsing and get back a job handle (job_id, status_url, stream_url) without waiting for it to finish.",
       inputSchema: workbookInputShape,
@@ -77,6 +80,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     "get_job_status",
     {
       title: "Get job status",
+      annotations: apiToolAnnotations.get_job_status,
       description: "Check the status of a parse job submitted via submit_job.",
       inputSchema: { job_id: z.string().describe("Job ID returned by submit_job") },
     },
@@ -93,6 +97,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     "stream_job",
     {
       title: "Stream job output",
+      annotations: apiToolAnnotations.stream_job,
       description: "Fetch the NDJSON output of a completed parse job. Pass `since` to resume from a record index.",
       inputSchema: {
         job_id: z.string().describe("Job ID returned by submit_job"),
@@ -112,6 +117,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     "diff_workbooks",
     {
       title: "Diff workbooks",
+      annotations: apiToolAnnotations.diff_workbooks,
       description:
         "Compare two .xlsx workbooks and return the cell-level differences as JSON. Both files are parsed on the Basis API, joined on (sheet title, cell ref) and classified into added, removed, and changed (value and/or formula), with format-only changes bucketed separately. Provide exactly one of before_path/before_url/before_base64 and one of after_path/after_url/after_base64.",
       inputSchema: diffInputShape,
