@@ -8,7 +8,7 @@ seriously. This document explains how to report a vulnerability.
 Please report suspected security issues privately. **Do not** open a public
 GitHub issue, pull request, or discussion for a security report.
 
-- **Email:** security@basis1.tech
+- **Email:** security@onigiricapital.com
 - Encrypt sensitive details if possible, and include:
   - a description of the issue and its impact,
   - steps to reproduce (a minimal proof of concept is ideal),
