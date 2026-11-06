@@ -10,6 +10,11 @@ An [MCP](https://modelcontextprotocol.io) server for [Basis](https://basis1.tech
 
 You need Node.js 20.19 or later and a Basis API key, which you create yourself in your account settings at [basis1.tech/settings](https://basis1.tech/settings). Each snippet below starts the server with `npx`, which downloads the package the first time.
 
+One-click install (you'll paste your API key afterwards in Cursor, or be asked for it in VS Code):
+
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=basis&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBiYXNpczEvbWNwIl0sImVudiI6eyJCQVNJU19BUElfS0VZIjoieW91ci1hcGkta2V5In19)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Basis-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=basis&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22basis-api-key%22%2C%22description%22%3A%22Basis%20API%20key%20%28create%20one%20at%20basis1.tech%2Fsettings%29%22%2C%22password%22%3Atrue%7D%5D&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40basis1%2Fmcp%22%5D%2C%22env%22%3A%7B%22BASIS_API_KEY%22%3A%22%24%7Binput%3Abasis-api-key%7D%22%7D%7D)
+
 ### Claude Desktop
 
 Open **Settings → Developer → Edit Config** and add this to `claude_desktop_config.json`, then restart Claude Desktop:
