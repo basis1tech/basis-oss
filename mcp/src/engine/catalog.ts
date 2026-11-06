@@ -53,7 +53,7 @@ const outputPath = {
   overwrite: z.boolean().optional().describe("Allow output_path to replace an existing file (default false: an existing file is an error)"),
 };
 
-const sessionId = z.string().describe("Session ID");
+const sessionId = z.string().describe("Session ID returned by create_session (list_sessions shows the open ones)");
 const cellRef = z.string().describe('Cell reference, optionally with sheet prefix (e.g. "B4" or "Sheet1!B4")');
 
 export const engineTools = {
@@ -86,35 +86,57 @@ export const engineTools = {
   create_session: spec({
     title: "Create session",
     description:
-      "Create a persistent computation session for a workbook. Pass path/base64/url for xlsx input, or omit all for a blank model. " +
-      "Returns a session_id for subsequent calls. The workbook is recalculated on load, including formulas " +
-      "written by other tools that carry no cached values, so open a file you have edited to read back what its " +
-      "formulas compute (get_outputs, get_formula_range), or change inputs with set_inputs.",
+      "Open a workbook in a session that the other workbook tools then use by session_id: the starting point for " +
+      "reading, editing, recalculating and exporting a model. Pass at most one of path, base64 (raw .xlsx bytes) or " +
+      "url, or none for a blank workbook (the only kind add_sheet can extend). The workbook is recalculated on " +
+      "load, including formulas written by other tools without cached values, so opening a file you edited " +
+      "elsewhere is how you read back what its formulas compute (get_outputs, get_formula_range); change inputs " +
+      "with set_inputs. Returns {session_id, document_id, library_file_id, sheets: [{index, name}], defined_names, " +
+      "calc}. For a one-off recalculation of a file, use recalc_workbook instead; to try a formula without a file, " +
+      "use evaluate_formula.",
     localNote: "The session lives in this process on this machine; nothing is uploaded.",
-    hostedNote: `${UPLOADS} Pass library_file_id instead to open a file from your Library.`,
+    hostedNote:
+      `${UPLOADS} Pass library_file_id instead to open a file from your Library. ` +
+      "Each API key can hold 5 open sessions, and a session closes on its own after 30 minutes without a call. " +
+      "A sixth create_session fails with max_sessions and lists the open sessions; close one first. " +
+      "save_to_library keeps the workbook beyond the session.",
     hosted: true,
     inputSchema: {
       path: z.string().optional().describe("Local filesystem path to an .xlsx file"),
       base64: z.string().optional().describe("Base64-encoded .xlsx file bytes"),
-      url: z.string().url().optional().describe("URL to fetch the .xlsx file from"),
+      url: z.string().url().optional().describe("Public https URL to fetch the .xlsx file from (private and local addresses are refused)"),
       document_id: z.string().optional().describe("Display label for this session"),
       calc: calcInputShape.optional(),
     },
     hostedInput: {
-      library_file_id: z.string().optional().describe("Library file ID to load"),
+      library_file_id: z.string().optional().describe("ID of a Library file to open (library_file_id from save_to_library or an earlier session)"),
     },
   }),
 
   close_session: spec({
     title: "Close session",
-    description: "Close a computation session and release its resources.",
+    description:
+      "End a session and discard its workbook: the session_id stops working and the session can't be reopened. " +
+      "Edits not saved with save_to_library (or downloaded with export_workbook) are lost, and its commit_session " +
+      "checkpoints go with it, so restore_session can't bring it back. Call it when you're done with a workbook, or " +
+      "to free a slot when create_session fails with max_sessions. Returns {closed: true}, plus unsaved: true and a " +
+      "hint when the workbook was edited and never saved to the Library. An unknown, expired or already closed " +
+      "session_id fails with session_not_found, which lists the sessions still open.",
+    hostedNote:
+      "Sessions also close on their own after 30 minutes without a call.",
     hosted: true,
-    inputSchema: { session_id: z.string().describe("Session ID to close") },
+    inputSchema: { session_id: z.string().describe("ID of the session to close, from create_session or list_sessions") },
   }),
 
   list_sessions: spec({
     title: "List sessions",
-    description: "List all active computation sessions.",
+    description:
+      "List the sessions open for this API key, to recover a session_id you've lost or to see how many are open " +
+      "before create_session. Returns {sessions: [{id, documentId, libraryFileId, createdAt, updatedAt, sheetCount, " +
+      "memBytes}]}, times in epoch milliseconds; closed and expired sessions are left out. Pass an id to any " +
+      "session tool, or to close_session to free a slot. Takes no arguments.",
+    hostedNote:
+      "Each API key can hold 5 open sessions, and a session closes on its own after 30 minutes without a call.",
     hosted: true,
     inputSchema: {},
   }),
@@ -122,18 +144,23 @@ export const engineTools = {
   add_sheet: spec({
     title: "Add sheet",
     description:
-      "Add a new sheet to a session's workbook. The new sheet becomes the active sheet. " +
-      "Only works on sessions created from blank documents (not imported xlsx files).",
+      "Add an empty sheet at the end of a session's workbook and make it the active sheet (the one unqualified refs " +
+      "like \"B4\" point to). Only for sessions created blank (create_session with no file); on an imported workbook " +
+      "it fails, so work in its existing sheets with set_inputs instead. To retitle a sheet use rename_sheet; " +
+      "sheets can't be deleted with these tools. Returns {sheet_index, sheet_name, sheet_count}.",
     hosted: true,
-    inputSchema: { session_id: sessionId, name: z.string().describe("Display name for the new sheet") },
+    inputSchema: { session_id: sessionId, name: z.string().describe("Name for the new sheet tab, e.g. \"Assumptions\"") },
   }),
 
   rename_sheet: spec({
     title: "Rename sheet",
     description:
-      "Rename a sheet in a session's workbook. Formulas, named ranges and validations that reference " +
-      "the sheet are rewritten to the new name, so results don't change. Excel's rules apply: 1-31 " +
-      "characters, none of : \\ / ? * [ ], no leading or trailing apostrophe, unique ignoring case.",
+      "Rename a sheet in a session's workbook, found by its 0-based index (see the sheets list from create_session " +
+      "or inspect_model). Formulas, named ranges and validations that reference the sheet are rewritten to the new " +
+      "name, so results don't change; use it rather than add_sheet when you only need a different title. Excel's " +
+      "rules apply: 1-31 characters, none of : \\ / ? * [ ], no leading or trailing apostrophe, unique ignoring " +
+      "case; a name that breaks them, or an index past the last sheet, fails with bad_request. Returns " +
+      "{sheet_index, previous_name, sheet_name}.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
@@ -145,23 +172,30 @@ export const engineTools = {
   set_inputs: spec({
     title: "Set inputs",
     description:
-      "Set one or more cells in a session and recalculate. Keys can be defined names or cell references. " +
-      'A string starting with "=" is stored as a formula, so you can also try a formula in place and read the result ' +
-      "with get_outputs. Returns applied changes and which named outputs changed (effects).",
+      "Write values or formulas into cells of a session and recalculate: the way to run a scenario on a model " +
+      "(\"what if Revenue is 1.2M?\"). Keys are defined names (e.g. \"Revenue\") or cell refs (\"B4\" on the active " +
+      "sheet, \"Sheet1!A1\"); values are numbers, booleans (stored as 1/0), text, or a string starting with \"=\" to " +
+      "store a formula. Whatever the target cells held before is overwritten, so call commit_session first if you " +
+      "may want restore_session to undo it. Keys are applied in order, and one that isn't a defined name or valid " +
+      "ref fails the call, leaving the keys before it written. Returns {applied, recalc, effects}: the cells " +
+      "written, recalc stats (with a warning for circular references that didn't converge) and each defined name " +
+      "whose value changed, with before and after. Read other results with get_outputs; to try a formula without " +
+      "touching the workbook use evaluate_formula; to create a name use define_variable.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
-      inputs: z.record(z.union([z.number(), z.string(), z.boolean()])).describe('Map of name-or-ref to value. Example: {"Revenue": 1000000}'),
+      inputs: z.record(z.union([z.number(), z.string(), z.boolean()])).describe('Map of defined name or cell ref to value; a string starting with "=" is stored as a formula. Example: {"Revenue": 1000000, "Sheet1!B4": "=B2*1.1"}'),
     },
   }),
 
   set_calc_settings: spec({
     title: "Set calc settings",
     description:
-      "Turn iterative calculation on or off for a session and recalculate. Needed for circular models " +
-      "(e.g. development pro formas where loan size depends on cost, which includes the loan's interest and fees): " +
-      "with it on, set_inputs re-converges the loop on every call. Saved with the session's next commit " +
-      "(restore_session to an earlier commit rolls it back) and written to the workbook, so an exported xlsx iterates in Excel too.",
+      "Turn iterative calculation on or off for a session and recalculate. Needed for circular models (e.g. " +
+      "development pro formas where loan size depends on cost, which includes the loan's interest and fees): with " +
+      "it on, set_inputs re-converges the loop on every call. Saved with the session's next commit (restore_session " +
+      "to an earlier commit rolls it back) and written to the workbook, so an exported xlsx iterates in Excel too. " +
+      "Returns {calc, recalc}: the settings now in force and whether the model converged.",
     hosted: true,
     inputSchema: { session_id: sessionId, ...calcInputShape.shape },
   }),
@@ -169,9 +203,13 @@ export const engineTools = {
   get_outputs: spec({
     title: "Get outputs",
     description:
-      "Read computed values from a session, e.g. to check what the formulas in a workbook return. " +
-      'Pass defined names, cell refs ("B4", "Sheet1!B4") or ranges ("Sheet1!H2:H18", one entry per cell), ' +
-      'or omit to read all defined names. A cell that evaluates to an Excel error is returned with type "error", not as a tool failure.',
+      "Read computed values from a session by defined name, cell or range: the way to check what a model's formulas " +
+      "return, e.g. after set_inputs. Pass names as defined names, cell refs (\"B4\", \"Sheet1!B4\") or ranges " +
+      "(\"Sheet1!H2:H18\", up to 2,000 cells, one entry per cell); omit names to read every defined name. Returns " +
+      "{values: {<name or ref>: {cell, type, value}}}; a cell holding an Excel error comes back with type \"error\" " +
+      "and its code, not as a tool failure, while a key that isn't a defined name or valid ref fails the call. " +
+      "Values only: for formula text use get_cell_formula or get_formula_range, and to see what feeds a value use " +
+      "trace_dependencies.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
@@ -184,32 +222,46 @@ export const engineTools = {
 
   define_variable: spec({
     title: "Define variable",
-    description: "Create or retarget a named variable in the session's workbook.",
+    description:
+      "Create a defined name for a cell, or repoint an existing one, so set_inputs and get_outputs can use a " +
+      "readable key (\"Revenue\") instead of a cell ref. A name that already exists in the same scope is overwritten " +
+      "with the new target; no cell's value or formula changes. Names follow Excel's rules (start with a letter, _ " +
+      "or \\, no spaces, not a cell ref) and invalid ones fail the call. Returns {name, refers_to, defined_names}, " +
+      "the last being every name after the change. Names can't be deleted with these tools; repoint one instead. To " +
+      "see the existing names first, use inspect_model.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
-      name: z.string().describe('Variable name (e.g. "Revenue")'),
-      refers_to: z.string().describe('Cell reference (e.g. "Sheet1!$A$1")'),
-      scope_sheet: z.number().int().optional().describe("Sheet index for sheet-scoped name"),
+      name: z.string().describe('Name to create or repoint, following Excel\'s name rules (e.g. "Revenue", "Exit_Cap")'),
+      refers_to: z.string().describe('Cell reference the name points to (e.g. "Sheet1!$A$1")'),
+      scope_sheet: z.number().int().optional().describe("0-based sheet index for a sheet-scoped name; omit for workbook scope"),
     },
   }),
 
   inspect_model: spec({
     title: "Inspect model",
-    description: "Inspect a session's model structure: sheets, defined names, stats, and optionally dependency edges.",
+    description:
+      "Summarize a session's structure: each sheet's index, name and used rows and columns, every defined name with " +
+      "its target, the iterative-calc settings, and counts of cells, memory, edit events and commits. Use it to " +
+      "find your way around a workbook before reading or editing it: sheet indexes for rename_sheet and " +
+      "define_variable, names for get_outputs and set_inputs. include_edges adds every formula dependency edge, " +
+      "which is large on big models; to follow the chain from one cell use trace_dependencies instead. For errors, " +
+      "plugs and broken references use audit_workbook.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
-      include_edges: z.boolean().optional().default(false).describe("Include the formula dependency graph"),
+      include_edges: z.boolean().optional().default(false).describe("Also return every formula dependency edge (default false; large on big models)"),
     },
   }),
 
   get_cell_formula: spec({
     title: "Get cell formula",
     description:
-      "Read the formula source text and computed value for a single cell in a session. " +
-      "Returns whether the cell contains a formula, the formula text (with = prefix), " +
-      "the computed value, and value type. Use to inspect what a cell actually computes.",
+      "Read one cell's formula and computed value in a session: {cell, formula, value, value_type}, where formula " +
+      "is null for a constant or empty cell and value_type is \"number\", \"string\", \"boolean\", \"error\" or \"empty\". " +
+      "Use it to check what a single cell computes. For a block of cells use get_formula_range (one call instead of " +
+      "many), for values by defined name use get_outputs, and for the cells that feed it use trace_dependencies. An " +
+      "invalid cell reference fails the call.",
     hosted: true,
     inputSchema: { session_id: sessionId, cell: cellRef },
   }),
@@ -217,10 +269,12 @@ export const engineTools = {
   trace_dependencies: spec({
     title: "Trace dependencies",
     description:
-      "Trace the formula dependency graph for a cell in a session. Returns precedents " +
-      "(cells this cell references) and/or dependents (cells that reference this cell), " +
-      "with their formulas and values. Use to understand calculation chains, debug " +
-      "circular refs, and find the root cause of errors.",
+      "Follow formula references from one cell in a session, breadth first, up to depth levels (1-5): direction " +
+      "\"precedents\" walks to the cells it reads, \"dependents\" to the cells that read it. Returns {root, direction, " +
+      "max_depth, levels: [{depth, nodes: [{cell, formula, value, value_type}]}]}, with ranges expanded to single " +
+      "cells and each cell listed once. Use it to explain where a number comes from, find the source of an error, " +
+      "or see what an input affects. For one cell's own formula use get_cell_formula; for the whole graph at once " +
+      "use inspect_model with include_edges.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
@@ -237,9 +291,12 @@ export const engineTools = {
   audit_workbook: spec({
     title: "Audit workbook",
     description:
-      "Run a comprehensive audit of a session's workbook. Returns statistics on sheets, " +
-      "cells, formulas, errors, named ranges, and the dependency graph. Use to get an " +
-      "overview of model structure before making changes.",
+      "Check a session's whole workbook for modeling problems and return a JSON report: broken references, circular " +
+      "references and whether they converge, hardcoded plugs (a constant or odd formula breaking a run of " +
+      "consistent formulas), external links, volatile functions, hidden sheets and names, stale cached values, and " +
+      "a verification block comparing Basis's computed values with the ones Excel last saved. Recalculates first " +
+      "and changes nothing else. Use it as a health check before trusting or handing off a model; for structure " +
+      "only use inspect_model, for one value's lineage trace_dependencies, and to compare two files diff_workbooks.",
     hosted: true,
     inputSchema: { session_id: sessionId },
   }),
@@ -247,9 +304,12 @@ export const engineTools = {
   get_formula_range: spec({
     title: "Get formula range",
     description:
-      "Batch-read formulas and computed values for a rectangular range of cells: the way to check what the " +
-      "formulas in a file compute. Returns an array of {cell, formula, value, value_type} for each cell in the range; " +
-      'a formula that errors has value_type "error". Much more efficient than calling get_cell_formula repeatedly.',
+      "Batch-read formulas and computed values for a rectangular range in a session: the way to check what the " +
+      "formulas in a block of cells compute. Returns {worksheet, range, cell_count, cells: [{cell, formula, value, " +
+      "value_type}]}, with formula including its leading \"=\" (null for constants and empty cells); a formula that " +
+      "errors has value_type \"error\". One call replaces many get_cell_formula calls; to read values by defined name " +
+      "use get_outputs. Every cell in the rectangle is returned, so ask only for the cells you need. An unknown " +
+      "sheet or malformed range fails the call.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
@@ -260,19 +320,22 @@ export const engineTools = {
   commit_session: spec({
     title: "Commit session",
     description:
-      "Create a named checkpoint of the session's current state. " +
-      "Returns the commit ID which can be passed to restore_session to roll back. " +
-      "Checkpoints live in the session only; to keep one in the Library's version history, " +
-      "call save_to_library after it (the version takes this message as its name).",
+      "Create a named checkpoint of the session's current state, e.g. before a risky edit. Returns {commit_id, " +
+      "message, total_commits}; pass commit_id to restore_session to roll back. Every call adds a new checkpoint. " +
+      "Checkpoints live in the session only and are lost when it closes or expires; to keep one in the Library's " +
+      "version history, call save_to_library after it (the version takes this message as its name).",
     hosted: true,
-    inputSchema: { session_id: sessionId, message: z.string().describe("Short description of the checkpoint") },
+    inputSchema: { session_id: sessionId, message: z.string().describe("Short description of the checkpoint, e.g. \"before exit cap change\"; also names the next Library version") },
   }),
 
   restore_session: spec({
     title: "Restore session",
     description:
-      "Roll back a session to a previous commit. Reverts all cell changes made since that commit. " +
-      "Returns the number of cells that were changed by the rollback.",
+      "Roll a session back to a checkpoint from commit_session: every cell edit made after it is undone, calc " +
+      "settings included, and the workbook is recalculated. Use it to throw away a what-if or a bad edit; it " +
+      "rewinds this session only and can't reopen a closed one. Returns {restored_to, cells_changed, calc, recalc}. " +
+      "A commit_id the session doesn't have fails the call. To compare two states without rolling back, export each " +
+      "with snapshot_session and use diff_workbooks.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
@@ -282,11 +345,14 @@ export const engineTools = {
 
   snapshot_session: spec({
     title: "Snapshot session",
-    description: "Export the session's current state as xlsx bytes (base64). Optionally creates a commit first.",
+    description:
+      "Export the session's current state as xlsx bytes (base64). Optionally creates a commit first. Returns " +
+      "{base64, bytes, commit_id}. To get the file for a user or a non-Excel reader, with formula errors listed, " +
+      "prefer export_workbook.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
-      commit_message: z.string().optional().describe("If provided, creates a commit before saving"),
+      commit_message: z.string().optional().describe("If set, commits with this message first and returns its commit_id"),
     },
   }),
 
@@ -325,7 +391,7 @@ export const engineTools = {
     inputSchema: {
       path: z.string().optional().describe("Local filesystem path to an .xlsx file"),
       base64: z.string().optional().describe("Base64-encoded .xlsx file bytes"),
-      url: z.string().url().optional().describe("URL to fetch the .xlsx file from"),
+      url: z.string().url().optional().describe("Public https URL to fetch the .xlsx file from (private and local addresses are refused)"),
       filename: z.string().optional().describe("Name for the returned file (defaults to workbook.xlsx)"),
     },
     bridgeInput: outputPath,
@@ -334,18 +400,18 @@ export const engineTools = {
   save_to_library: spec({
     title: "Save to Library",
     description:
-      "Save the session's workbook to the user's Library for durable storage. " +
-      "If the session was loaded from the Library or was previously saved, this creates a new version " +
-      "of that file. Otherwise it creates a new Library file. " +
-      "Each save is a named version in the Library's history: pass `message`, or it takes the latest " +
-      "commit_session message since the last save. commit_session checkpoints themselves stay in the " +
-      "session, so save after each step you want kept as a version. " +
-      "Requires a Basis API key. Returns the library_file_id.",
+      "Save the session's workbook to the user's Library for durable storage. If the session was loaded from the " +
+      "Library or was previously saved, this creates a new version of that file. Otherwise it creates a new Library " +
+      "file. Each save is a named version in the Library's history: pass `message`, or it takes the latest " +
+      "commit_session message since the last save. commit_session checkpoints themselves stay in the session, so " +
+      "save after each step you want kept as a version. Returns {library_file_id, version_id, name, message, " +
+      "created, noop}; noop is true when nothing changed since the last version. Open the file again later with " +
+      "create_session's library_file_id.",
     localNote: "Uploads the workbook to your Basis Library.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
-      name: z.string().optional().describe("File name (defaults to the session's document label)"),
+      name: z.string().optional().describe("File name for a new Library file (defaults to the session's document label); not used when saving a new version"),
       message: z
         .string()
         .max(500)

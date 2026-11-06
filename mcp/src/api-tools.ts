@@ -20,7 +20,7 @@ const workbookInputShape = {
   path: z.string().optional().describe("Local filesystem path to an .xlsx file (read on this machine, then uploaded)"),
   url: z.string().url().optional().describe("URL to fetch the .xlsx file from"),
   base64: z.string().optional().describe("Base64-encoded .xlsx file bytes"),
-  webhook_url: z.string().url().optional().describe("HMAC-signed POST here when the parse completes"),
+  webhook_url: z.string().url().optional().describe("https URL that gets an HMAC-signed POST with the job's status when the parse finishes"),
 };
 
 const diffInputShape = {
@@ -42,7 +42,14 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       title: "Parse workbook",
       annotations: apiToolAnnotations.parse_workbook,
       description:
-        "Parse an .xlsx workbook on the Basis API and return the full semantic NDJSON output (workbook_meta, sheet, cell, edge, image, image_summary, audit records). Handles small vs. large files transparently. The file is uploaded to the Basis API.",
+        "Parse an .xlsx workbook in one call and return its full semantic NDJSON: one JSON record per line " +
+        "(workbook_meta, sheet, cell, edge, image, image_summary, audit), covering every cell's value and formula and " +
+        "the formula dependency edges. Use it to read a whole file without opening a session; large files are handed " +
+        "to an async job and awaited for you. To start a parse without waiting, use submit_job; to read a few cells " +
+        "or edit, use create_session; to compare two files, use diff_workbooks. Pass exactly one of path, url or " +
+        "base64 (up to 20 MB). The file is uploaded to the Basis API, and each call counts against the API key's " +
+        "parse quota (quota_exceeded once it is used up). webhook_url, if set, also gets an HMAC-signed POST when the " +
+        "parse finishes.",
       inputSchema: workbookInputShape,
     },
     async (args) => {
@@ -62,7 +69,12 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       title: "Submit parse job",
       annotations: apiToolAnnotations.submit_job,
       description:
-        "Submit an .xlsx workbook to the Basis API for async parsing and get back a job handle (job_id, status_url, stream_url) without waiting for it to finish.",
+        "Start an async parse of an .xlsx workbook and return at once with a job handle {job_id, status: " +
+        "\"processing\", status_url, stream_url}. Use it instead of parse_workbook for large files or when you don't " +
+        "want to wait: poll get_job_status until status is \"completed\", then read the records with stream_job. Every " +
+        "call starts a new job and counts against the API key's parse quota, so don't resubmit a file whose job is " +
+        "still running. Pass exactly one of path, url or base64 (up to 20 MB); the file is uploaded to the Basis API. " +
+        "webhook_url, if set, gets an HMAC-signed POST when the job finishes, so you can skip polling.",
       inputSchema: workbookInputShape,
     },
     async (args) => {
@@ -81,7 +93,13 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     {
       title: "Get job status",
       annotations: apiToolAnnotations.get_job_status,
-      description: "Check the status of a parse job submitted via submit_job.",
+      description:
+        "Check on a parse job started by submit_job. Returns {job_id, status, created_at, updated_at, expires_at, " +
+        "bytes_in, records_out, stream_url, error}, where status is \"processing\", \"completed\" or \"failed\". It is a " +
+        "cheap read, so poll it every few seconds until status changes; then read the records with stream_job, or the " +
+        "error when the job failed. Results are kept until expires_at. An unknown or expired job_id, or one submitted " +
+        "with another API key, fails with not_found. parse_workbook returns its result directly and needs no status " +
+        "check.",
       inputSchema: { job_id: z.string().describe("Job ID returned by submit_job") },
     },
     async ({ job_id }) => {
@@ -98,10 +116,15 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
     {
       title: "Stream job output",
       annotations: apiToolAnnotations.stream_job,
-      description: "Fetch the NDJSON output of a completed parse job. Pass `since` to resume from a record index.",
+      description:
+        "Return the NDJSON records of a finished parse job from submit_job: the same output parse_workbook returns, " +
+        "one JSON record per line. Call it once get_job_status reports \"completed\": a job still processing fails with " +
+        "job_not_ready (poll again), a failed job returns its parse error, and an unknown or expired job_id fails " +
+        "with not_found. Everything after `since` comes back in one result, with no paging; pass since to skip " +
+        "records you already have.",
       inputSchema: {
         job_id: z.string().describe("Job ID returned by submit_job"),
-        since: z.number().int().nonnegative().optional().describe("Record index to resume from"),
+        since: z.number().int().nonnegative().optional().describe("Number of records to skip from the start (the 0-based index of the first record to return; default 0)"),
       },
     },
     async ({ job_id, since }) => {
@@ -119,7 +142,13 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       title: "Diff workbooks",
       annotations: apiToolAnnotations.diff_workbooks,
       description:
-        "Compare two .xlsx workbooks and return the cell-level differences as JSON. Both files are parsed on the Basis API, joined on (sheet title, cell ref) and classified into added, removed, and changed (value and/or formula), with format-only changes bucketed separately. Provide exactly one of before_path/before_url/before_base64 and one of after_path/after_url/after_base64.",
+        "Compare two .xlsx files cell by cell and return the differences as JSON: {summary, added, removed, changed, " +
+        "format_changed}. Cells are matched on (sheet title, cell ref); changed covers value and formula changes, and " +
+        "format-only changes are listed separately. Use it to see what changed between two versions of a file, such " +
+        "as before and after an edit. For problems inside one workbook use audit_workbook; to undo edits in a session " +
+        "use restore_session. Provide exactly one of before_path/before_url/before_base64 and one of " +
+        "after_path/after_url/after_base64. Both files are uploaded to and parsed on the Basis API (up to 20 MB each) " +
+        "and count against the API key's parse quota; nothing is stored.",
       inputSchema: diffInputShape,
     },
     async (args) => {
