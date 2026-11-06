@@ -84,7 +84,7 @@ try {
     const [init, list] = r.responses;
     if (init?.result?.serverInfo?.name !== "basis") throw new Error(`bad initialize: ${JSON.stringify(init)}\n${r.stderr}`);
     const tools = list?.result?.tools ?? [];
-    if (tools.length !== 26) throw new Error(`expected 26 tools, got ${tools.length}\n${r.stderr}`);
+    if (tools.length !== 25) throw new Error(`expected 25 tools, got ${tools.length}\n${r.stderr}`);
     if (r.stderr.includes("basis_pack_smoke_key")) throw new Error("the API key was logged");
     return `${init.result.serverInfo.name} ${init.result.serverInfo.version}, protocol ${init.result.protocolVersion}, ${tools.length} tools`;
   };
