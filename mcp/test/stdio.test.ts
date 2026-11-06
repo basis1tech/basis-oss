@@ -35,14 +35,14 @@ describe("stdio server (dist/index.js)", () => {
   });
   after(() => fake.close());
 
-  test("initialize + tools/list: 26 tools, nothing but protocol on stdout", async () => {
+  test("initialize + tools/list: 25 tools, nothing but protocol on stdout", async () => {
     const r = await run({ BASIS_API_KEY: GOOD_KEY });
     assert.deepEqual(r.stdoutNoise, []);
     const [init, list] = r.responses;
     assert.equal(init!.result.protocolVersion, PROTOCOL_VERSION);
     assert.equal(init!.result.serverInfo.name, "basis");
     const names: string[] = list!.result.tools.map((t: { name: string }) => t.name);
-    assert.equal(names.length, 26);
+    assert.equal(names.length, 25);
     for (const n of ["parse_workbook", "diff_workbooks", "evaluate_formula", "create_session", "save_to_library", "rename_sheet", "export_workbook", "recalc_workbook"]) {
       assert.ok(names.includes(n), n);
     }
@@ -51,7 +51,7 @@ describe("stdio server (dist/index.js)", () => {
     assert.deepEqual(tools.filter((t) => typeof t.annotations?.readOnlyHint !== "boolean").map((t) => t.name), []);
     assert.equal(tools.find((t) => t.name === "get_outputs")!.annotations!.readOnlyHint, true);
     assert.equal(tools.find((t) => t.name === "close_session")!.annotations!.destructiveHint, true);
-    assert.match(r.stderr, /ready: 26 tools; workbook tools run on hosted/);
+    assert.match(r.stderr, /ready: 25 tools; workbook tools run on hosted/);
     assert.ok(!r.stderr.includes(GOOD_KEY), "the key must never be logged");
     assert.equal(r.code, 0);
   });

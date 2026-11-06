@@ -105,8 +105,7 @@ Workbook inputs accept exactly one of `path` (a file on your computer), `url` or
 
 - `parse_workbook`: returns the workbook as NDJSON records (`workbook_meta`, `sheet`, `cell`, `edge`, `image`, `image_summary`, `audit`). Large files run as a background job and are polled to completion for you.
 - `submit_job`: starts a parse job and returns its handle (`job_id`, `status_url`, `stream_url`) without waiting.
-- `get_job_status`: the status of a job.
-- `stream_job`: the NDJSON output of a finished job, optionally from record `since`.
+- `stream_job`: the NDJSON output of a finished job, optionally from record `since`. `wait_seconds` (up to 60) waits for a job that is still running; `status_only: true` returns the job's status instead.
 - `diff_workbooks`: cell-level differences between two workbooks: added, removed and changed cells (value and/or formula), with format-only changes listed separately. Takes `before_*` and `after_*` inputs and `include_format`.
 
 **Formulas**
@@ -126,17 +125,18 @@ Both file-returning tools carry over what Basis does not model (styles, charts, 
 - `set_inputs`: sets values or formulas by defined name or cell reference, recalculates, and reports which named outputs changed.
 - `get_outputs`: reads computed values by name, cell reference or range (`Sheet1!H2:H18`), or every defined name.
 - `define_variable`: creates or retargets a defined name.
+- `delete_variable`: deletes a defined name that no formula uses (it lists the formulas that still do).
 - `add_sheet`: adds a sheet to a blank workbook.
 - `rename_sheet`: renames a sheet; formulas, defined names and validations that point at it follow the new name.
 - `set_calc_settings`: turns iterative calculation on or off for circular models.
 - `inspect_model`: sheets, defined names, calculation settings and statistics, optionally with the dependency graph.
-- `get_cell_formula`, `get_formula_range`: formulas and values for one cell or a range.
-- `trace_dependencies`: precedents and dependents of a cell, up to 5 levels deep.
+- `get_formula_range`: formulas and values for one cell (`B4`) or a range (`A1:D10`), up to 2,000 cells a call.
+- `trace_dependencies`: precedents, dependents or both for a cell, up to 5 levels deep.
 - `audit_workbook`: a structural audit (errors, broken references, cycles, named ranges).
 - `commit_session`, `restore_session`: named checkpoints and rollback.
 - `export_workbook`: recalculates the session and returns it as an `.xlsx` with every formula's computed value saved in the file, plus a summary of formula errors (`#REF!`, `#DIV/0!`, `#NAME?` with sheet and cell). Pass `output_path` to write the file on your computer instead of getting base64 back (`overwrite: true` to replace an existing file).
-- `snapshot_session`: the current workbook as `.xlsx` bytes (base64), no summary. Prefer `export_workbook`.
 - `save_to_library`: saves the workbook to your Basis Library as a new file or a new version.
+- `list_library_files`: lists the workbooks in your Library, newest first, optionally filtered by name, so you can reopen one with `create_session`'s `library_file_id`.
 
 Tool errors come back as a tool result with `isError` set and a JSON body `{"code", "message", "status"}`, for example `missing_api_key`, `unauthorized`, `network_error`, `session_not_found` or one of the API's error codes.
 

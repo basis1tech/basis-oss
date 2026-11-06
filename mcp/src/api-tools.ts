@@ -14,7 +14,11 @@ export interface ApiToolDeps {
   maxFetchBytes: number;
 }
 
-export const API_TOOL_NAMES = ["parse_workbook", "submit_job", "get_job_status", "stream_job", "diff_workbooks"] as const;
+export const API_TOOL_NAMES = ["parse_workbook", "submit_job", "stream_job", "diff_workbooks"] as const;
+
+/** stream_job's wait_seconds ceiling, as on the hosted endpoint. */
+export const MAX_JOB_WAIT_SECONDS = 60;
+const JOB_WAIT_POLL_MS = 1000;
 
 const workbookInputShape = {
   path: z.string().optional().describe("Local filesystem path to an .xlsx file (read on this machine, then uploaded)"),
@@ -71,7 +75,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       description:
         "Start an async parse of an .xlsx workbook and return at once with a job handle {job_id, status: " +
         "\"processing\", status_url, stream_url}. Use it instead of parse_workbook for large files or when you don't " +
-        "want to wait: poll get_job_status until status is \"completed\", then read the records with stream_job. Every " +
+        "want to wait: call stream_job with wait_seconds to wait for the records (or status_only to just check). Every " +
         "call starts a new job and counts against the API key's parse quota, so don't resubmit a file whose job is " +
         "still running. Pass exactly one of path, url or base64 (up to 20 MB); the file is uploaded to the Basis API. " +
         "webhook_url, if set, gets an HMAC-signed POST when the job finishes, so you can skip polling.",
@@ -89,47 +93,44 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
   );
 
   server.registerTool(
-    "get_job_status",
-    {
-      title: "Get job status",
-      annotations: apiToolAnnotations.get_job_status,
-      description:
-        "Check on a parse job started by submit_job. Returns {job_id, status, created_at, updated_at, expires_at, " +
-        "bytes_in, records_out, stream_url, error}, where status is \"processing\", \"completed\" or \"failed\". It is a " +
-        "cheap read, so poll it every few seconds until status changes; then read the records with stream_job, or the " +
-        "error when the job failed. Results are kept until expires_at. An unknown or expired job_id, or one submitted " +
-        "with another API key, fails with not_found. parse_workbook returns its result directly and needs no status " +
-        "check.",
-      inputSchema: { job_id: z.string().describe("Job ID returned by submit_job") },
-    },
-    async ({ job_id }) => {
-      try {
-        return jsonResult(await deps.basis().getJob(job_id));
-      } catch (err) {
-        return errorResult(err);
-      }
-    },
-  );
-
-  server.registerTool(
     "stream_job",
     {
       title: "Stream job output",
       annotations: apiToolAnnotations.stream_job,
       description:
-        "Return the NDJSON records of a finished parse job from submit_job: the same output parse_workbook returns, " +
-        "one JSON record per line. Call it once get_job_status reports \"completed\": a job still processing fails with " +
-        "job_not_ready (poll again), a failed job returns its parse error, and an unknown or expired job_id fails " +
-        "with not_found. Everything after `since` comes back in one result, with no paging; pass since to skip " +
-        "records you already have.",
+        "Check on or read a parse job started by submit_job. By default it returns the job's NDJSON records once it " +
+        "has completed: the same output parse_workbook returns, one JSON record per line. Pass wait_seconds (up to " +
+        "60) to wait that long for a job still processing; if it is still processing after that, the call fails with " +
+        "job_not_ready, so call again. Pass status_only: true to get the status instead, without waiting: {job_id, " +
+        "status, created_at, updated_at, expires_at, bytes_in, records_out, stream_url, error}, where status is " +
+        "\"processing\", \"completed\" or \"failed\". A failed job returns its parse error, and an unknown or expired " +
+        "job_id, or one submitted with another API key, fails with not_found. Everything after `since` comes back in " +
+        "one result, with no paging; pass since to skip records you already have. parse_workbook returns its result " +
+        "directly and needs no job.",
       inputSchema: {
         job_id: z.string().describe("Job ID returned by submit_job"),
         since: z.number().int().nonnegative().optional().describe("Number of records to skip from the start (the 0-based index of the first record to return; default 0)"),
+        wait_seconds: z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_JOB_WAIT_SECONDS)
+          .optional()
+          .describe(`Seconds to wait for a job that is still processing (0-${MAX_JOB_WAIT_SECONDS}, default 0: don't wait)`),
+        status_only: z.boolean().optional().describe("Return the job's status instead of its records, without waiting (default false)"),
       },
     },
-    async ({ job_id, since }) => {
+    async ({ job_id, since, wait_seconds, status_only }) => {
       try {
-        return textResult(await deps.basis().streamJob(job_id, since));
+        const basis = deps.basis();
+        if (status_only) return jsonResult(await basis.getJob(job_id));
+        const deadline = Date.now() + (wait_seconds ?? 0) * 1000;
+        while (Date.now() < deadline) {
+          const job = await basis.getJob(job_id);
+          if (job.status !== "processing") break;
+          await new Promise((resolve) => setTimeout(resolve, Math.min(JOB_WAIT_POLL_MS, Math.max(0, deadline - Date.now()))));
+        }
+        return textResult(await basis.streamJob(job_id, since));
       } catch (err) {
         return errorResult(err);
       }

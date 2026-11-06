@@ -120,7 +120,7 @@ export const engineTools = {
       "Edits not saved with save_to_library (or downloaded with export_workbook) are lost, and its commit_session " +
       "checkpoints go with it, so restore_session can't bring it back. Call it when you're done with a workbook, or " +
       "to free a slot when create_session fails with max_sessions. Returns {closed: true}, plus unsaved: true and a " +
-      "hint when the workbook was edited and never saved to the Library. An unknown, expired or already closed " +
+      "hint when the workbook was edited since it was opened or last saved to the Library. An unknown, expired or already closed " +
       "session_id fails with session_not_found, which lists the sessions still open.",
     hostedNote:
       "Sessions also close on their own after 30 minutes without a call.",
@@ -176,8 +176,8 @@ export const engineTools = {
       "(\"what if Revenue is 1.2M?\"). Keys are defined names (e.g. \"Revenue\") or cell refs (\"B4\" on the active " +
       "sheet, \"Sheet1!A1\"); values are numbers, booleans (stored as 1/0), text, or a string starting with \"=\" to " +
       "store a formula. Whatever the target cells held before is overwritten, so call commit_session first if you " +
-      "may want restore_session to undo it. Keys are applied in order, and one that isn't a defined name or valid " +
-      "ref fails the call, leaving the keys before it written. Returns {applied, recalc, effects}: the cells " +
+      "may want restore_session to undo it. The batch is all or nothing: a key that isn't a defined name or valid " +
+      "ref, or a formula that can't be stored, fails the call with invalid_input and no cell is written. Returns {applied, recalc, effects}: the cells " +
       "written, recalc stats (with a warning for circular references that didn't converge) and each defined name " +
       "whose value changed, with before and after. Read other results with get_outputs; to try a formula without " +
       "touching the workbook use evaluate_formula; to create a name use define_variable.",
@@ -208,7 +208,7 @@ export const engineTools = {
       "(\"Sheet1!H2:H18\", up to 2,000 cells, one entry per cell); omit names to read every defined name. Returns " +
       "{values: {<name or ref>: {cell, type, value}}}; a cell holding an Excel error comes back with type \"error\" " +
       "and its code, not as a tool failure, while a key that isn't a defined name or valid ref fails the call. " +
-      "Values only: for formula text use get_cell_formula or get_formula_range, and to see what feeds a value use " +
+      "Values only: for formula text use get_formula_range, and to see what feeds a value use " +
       "trace_dependencies.",
     hosted: true,
     inputSchema: {
@@ -227,14 +227,33 @@ export const engineTools = {
       "readable key (\"Revenue\") instead of a cell ref. A name that already exists in the same scope is overwritten " +
       "with the new target; no cell's value or formula changes. Names follow Excel's rules (start with a letter, _ " +
       "or \\, no spaces, not a cell ref) and invalid ones fail the call. Returns {name, refers_to, defined_names}, " +
-      "the last being every name after the change. Names can't be deleted with these tools; repoint one instead. To " +
-      "see the existing names first, use inspect_model.",
+      "the last being every name after the change. To remove a name use delete_variable; to see the existing names " +
+      "first, use inspect_model.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
       name: z.string().describe('Name to create or repoint, following Excel\'s name rules (e.g. "Revenue", "Exit_Cap")'),
       refers_to: z.string().describe('Cell reference the name points to (e.g. "Sheet1!$A$1")'),
       scope_sheet: z.number().int().optional().describe("0-based sheet index for a sheet-scoped name; omit for workbook scope"),
+    },
+  }),
+
+  delete_variable: spec({
+    title: "Delete variable",
+    description:
+      "Delete a defined name from a session's workbook, e.g. one you made with define_variable and no longer need. " +
+      "Only the name goes; the cell it pointed to keeps its value and formula. Match is by name, ignoring case, in " +
+      "workbook scope or, with scope_sheet, the name scoped to that sheet. A name still used by a formula is not " +
+      "deleted: the call fails with name_in_use and lists those cells, so rewrite them with set_inputs (or repoint " +
+      "the name with define_variable) first. A name that doesn't exist in that scope fails with not_found, and " +
+      "Excel's built-in names (print areas, filters) can't be deleted. restore_session doesn't bring a deleted name " +
+      "back; define_variable recreates it. Returns {deleted, scope_sheet, defined_names}, the last being every name " +
+      "left. To see the names first, use inspect_model.",
+    hosted: true,
+    inputSchema: {
+      session_id: sessionId,
+      name: z.string().min(1).describe('Defined name to delete, e.g. "Exit_Cap" (case doesn\'t matter)'),
+      scope_sheet: z.number().int().min(0).optional().describe("0-based sheet index of a sheet-scoped name; omit for a workbook-scoped name"),
     },
   }),
 
@@ -254,26 +273,15 @@ export const engineTools = {
     },
   }),
 
-  get_cell_formula: spec({
-    title: "Get cell formula",
-    description:
-      "Read one cell's formula and computed value in a session: {cell, formula, value, value_type}, where formula " +
-      "is null for a constant or empty cell and value_type is \"number\", \"string\", \"boolean\", \"error\" or \"empty\". " +
-      "Use it to check what a single cell computes. For a block of cells use get_formula_range (one call instead of " +
-      "many), for values by defined name use get_outputs, and for the cells that feed it use trace_dependencies. An " +
-      "invalid cell reference fails the call.",
-    hosted: true,
-    inputSchema: { session_id: sessionId, cell: cellRef },
-  }),
-
   trace_dependencies: spec({
     title: "Trace dependencies",
     description:
       "Follow formula references from one cell in a session, breadth first, up to depth levels (1-5): direction " +
-      "\"precedents\" walks to the cells it reads, \"dependents\" to the cells that read it. Returns {root, direction, " +
-      "max_depth, levels: [{depth, nodes: [{cell, formula, value, value_type}]}]}, with ranges expanded to single " +
-      "cells and each cell listed once. Use it to explain where a number comes from, find the source of an error, " +
-      "or see what an input affects. For one cell's own formula use get_cell_formula; for the whole graph at once " +
+      "\"precedents\" walks to the cells it reads, \"dependents\" to the cells that read it, and \"both\" (the " +
+      "default) does each. Returns {root, direction, max_depth, levels: [{depth, nodes: [{cell, formula, value, " +
+      "value_type}]}]} for one direction, or precedents and dependents (each a levels list) in place of levels for " +
+      "\"both\"; ranges are expanded to single cells and each cell is listed once per direction. Use it to explain " +
+      "where a number comes from, find the source of an error, or see what an input affects. For a cell's own formula use get_formula_range; for the whole graph at once " +
       "use inspect_model with include_edges.",
     hosted: true,
     inputSchema: {
@@ -283,7 +291,7 @@ export const engineTools = {
         .enum(["precedents", "dependents", "both"])
         .optional()
         .default("both")
-        .describe('Which direction to trace (default "both")'),
+        .describe('"precedents" for the cells this cell reads, "dependents" for the cells that read it, "both" for each (default "both")'),
       depth: z.number().int().min(1).max(5).optional().default(1).describe("How many levels deep to trace (default 1, max 5)"),
     },
   }),
@@ -304,16 +312,17 @@ export const engineTools = {
   get_formula_range: spec({
     title: "Get formula range",
     description:
-      "Batch-read formulas and computed values for a rectangular range in a session: the way to check what the " +
-      "formulas in a block of cells compute. Returns {worksheet, range, cell_count, cells: [{cell, formula, value, " +
-      "value_type}]}, with formula including its leading \"=\" (null for constants and empty cells); a formula that " +
-      "errors has value_type \"error\". One call replaces many get_cell_formula calls; to read values by defined name " +
-      "use get_outputs. Every cell in the rectangle is returned, so ask only for the cells you need. An unknown " +
-      "sheet or malformed range fails the call.",
+      "Read the formulas and computed values of one cell or a rectangular range in a session: the way to check " +
+      "what a cell or a block of cells computes. Pass a single cell (\"B4\", \"Sheet1!B4\") or a range " +
+      "(\"A1:D10\"). Returns {worksheet, range, cell_count, cells: [{cell, formula, value, value_type}]}, with " +
+      "formula including its leading \"=\" (null for constants and empty cells) and value_type \"number\", " +
+      "\"string\", \"boolean\", \"error\" or \"empty\". Read a block in one call rather than cell by cell; to read " +
+      "values by defined name use get_outputs, and for the cells that feed one use trace_dependencies. Every cell in the rectangle is returned, up to 2,000 cells a call; a larger range fails with " +
+      "range_too_large, so read a big block in pieces. An unknown sheet or malformed range fails the call.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
-      range: z.string().describe('Range address, e.g. "A1:D10" or "Sheet1!B2:F2"'),
+      range: z.string().describe('A cell or range, e.g. "B4", "A1:D10" or "Sheet1!B2:F2"'),
     },
   }),
 
@@ -335,24 +344,11 @@ export const engineTools = {
       "settings included, and the workbook is recalculated. Use it to throw away a what-if or a bad edit; it " +
       "rewinds this session only and can't reopen a closed one. Returns {restored_to, cells_changed, calc, recalc}. " +
       "A commit_id the session doesn't have fails the call. To compare two states without rolling back, export each " +
-      "with snapshot_session and use diff_workbooks.",
+      "with export_workbook and use diff_workbooks.",
     hosted: true,
     inputSchema: {
       session_id: sessionId,
       commit_id: z.number().int().nonnegative().describe("Commit ID to restore to (from commit_session)"),
-    },
-  }),
-
-  snapshot_session: spec({
-    title: "Snapshot session",
-    description:
-      "Export the session's current state as xlsx bytes (base64). Optionally creates a commit first. Returns " +
-      "{base64, bytes, commit_id}. To get the file for a user or a non-Excel reader, with formula errors listed, " +
-      "prefer export_workbook.",
-    hosted: true,
-    inputSchema: {
-      session_id: sessionId,
-      commit_message: z.string().optional().describe("If set, commits with this message first and returns its commit_id"),
     },
   }),
 
@@ -406,7 +402,7 @@ export const engineTools = {
       "commit_session message since the last save. commit_session checkpoints themselves stay in the session, so " +
       "save after each step you want kept as a version. Returns {library_file_id, version_id, name, message, " +
       "created, noop}; noop is true when nothing changed since the last version. Open the file again later with " +
-      "create_session's library_file_id.",
+      "create_session's library_file_id; list_library_files finds it.",
     localNote: "Uploads the workbook to your Basis Library.",
     hosted: true,
     inputSchema: {
@@ -417,6 +413,24 @@ export const engineTools = {
         .max(500)
         .optional()
         .describe('Name for this version in the Library, e.g. "23 — revised exit cap" (defaults to the latest commit_session message)'),
+    },
+  }),
+
+  list_library_files: spec({
+    title: "List Library files",
+    description:
+      "List the workbooks in the user's Library: the files this account owns, newest-updated first, including " +
+      "everything save_to_library saved. Use it to find a library_file_id to open with create_session, or to " +
+      "check that a save landed. Returns {files: [{library_file_id, name, size_bytes, created_at, updated_at, " +
+      "latest_version: {seq, message, created_at}}], truncated}, times in ISO 8601; latest_version is the newest " +
+      "saved version and its name. Pass query to match part of a file name (ignoring case) and limit for how many " +
+      "to return (1-200, default 50); truncated is true when more files match, so narrow the query or raise limit. " +
+      "Shared files and the trash are left out. Fails with library_unavailable when the Library isn't connected.",
+    hostedNote: "Reads your Basis Library through the API (needs an API key).",
+    hosted: true,
+    inputSchema: {
+      query: z.string().max(200).optional().describe('Part of a file name to match, ignoring case, e.g. "pro forma" (omit for every file)'),
+      limit: z.number().int().min(1).max(200).optional().describe("Most files to return (1-200, default 50)"),
     },
   }),
 } as const;
@@ -477,17 +491,17 @@ const toolAnnotations: Record<EngineToolName, ToolAnnotations> = {
   set_calc_settings: write(false, true),
   get_outputs: read,
   define_variable: write(true, true),
+  delete_variable: write(true, true),
   inspect_model: read,
-  get_cell_formula: read,
   trace_dependencies: read,
   audit_workbook: read,
   get_formula_range: read,
   commit_session: write(false, false),
   restore_session: write(true, true),
-  snapshot_session: write(true, false),
   export_workbook: write(true, true),
   recalc_workbook: write(true, true, true),
   save_to_library: write(false, false, true),
+  list_library_files: read,
 };
 
 /** The annotations a client sees for a workbook tool. */
@@ -499,7 +513,6 @@ export function annotationsFor(name: EngineToolName): ToolAnnotations {
 export const apiToolAnnotations = {
   parse_workbook: readExternal,
   submit_job: write(false, false, true),
-  get_job_status: read,
   stream_job: read,
   diff_workbooks: readExternal,
 } as const satisfies Record<string, ToolAnnotations>;
