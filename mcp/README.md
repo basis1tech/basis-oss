@@ -110,7 +110,7 @@ Workbook inputs accept exactly one of `path` (a file on your computer), `url` or
 
 **Formulas**
 
-- `evaluate_formula`: evaluates one Excel formula against cell values you pass, for example `{"formula": "NPV(0.08,A1:A5)", "data": {"A1": 100, ...}}`. Supports 278 Excel functions, including financial, statistical, lookup and dynamic-array functions.
+- `evaluate_formula`: evaluates one Excel formula against cell values you pass, for example `{"formula": "NPV(0.08,A1:A5)", "data": {"A1": 100, ...}}`. Values keep their Excel types: `true`/`false` are logical cells and a string such as `"#N/A"` is that error, so `SUM`, `AVERAGE` and `COUNT` treat them as a workbook would. Supports 278 Excel functions, including financial, statistical, lookup and dynamic-array functions.
 
 **Recalculating a file**
 
@@ -128,6 +128,7 @@ Both file-returning tools carry over what Basis does not model (styles, charts, 
 - `delete_variable`: deletes a defined name that no formula uses (it lists the formulas that still do).
 - `add_sheet`: adds a sheet to a blank workbook.
 - `rename_sheet`: renames a sheet; formulas, defined names and validations that point at it follow the new name.
+- `delete_sheet`: deletes a sheet the way Excel does: formulas elsewhere that referenced it read `#REF!`, names scoped to it go, and later sheets move down one index. It lists the formulas and names that broke, refuses the last sheet, and can't be undone with `restore_session`.
 - `set_calc_settings`: turns iterative calculation on or off for circular models.
 - `inspect_model`: sheets, defined names, calculation settings and statistics, optionally with the dependency graph.
 - `get_formula_range`: formulas and values for one cell (`B4`) or a range (`A1:D10`), up to 2,000 cells a call.
