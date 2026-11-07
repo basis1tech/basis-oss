@@ -65,7 +65,17 @@ Configure a stdio server with the command `npx` and the arguments `-y @basis1/mc
 
 ### Without installing anything: the hosted endpoint
 
-If your client supports remote MCP servers over HTTP with custom headers, you can connect to the hosted endpoint directly instead of running this package:
+The hosted endpoint is `https://api.basis1.tech/mcp`. Clients that support remote MCP servers can connect to it directly instead of running this package, in one of two ways: by signing in to Basis, or with an API key.
+
+**Sign in (Claude, Claude Desktop, Claude mobile, and other clients that support MCP authorization).** No API key to copy:
+
+- **Claude** (claude.ai, Desktop, mobile): open **Customize → Connectors**, choose **Add custom connector**, enter `https://api.basis1.tech/mcp`, and select **Connect**. You'll be sent to basis1.tech to sign in (or create an account) and approve the connection.
+- **Claude Code:** `claude mcp add --transport http basis https://api.basis1.tech/mcp`, then run `/mcp` in a session and pick **basis** to sign in.
+- **Other clients:** add `https://api.basis1.tech/mcp` as a remote (streamable HTTP) server without an `Authorization` header. The client finds the sign-in page by itself (OAuth 2.1 with PKCE, as the MCP authorization specification describes).
+
+Your account's email must be confirmed before an app can connect. Listing the tools works before you sign in; the first tool call asks you to sign in. Connected apps share your account's free monthly allowance, and you can see and disconnect them in [Settings](https://basis1.tech/settings).
+
+**API key.** If your client supports custom headers, send your key instead:
 
 ```json
 {
