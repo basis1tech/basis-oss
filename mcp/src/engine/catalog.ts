@@ -62,9 +62,13 @@ export const engineTools = {
     description:
       "Evaluate an Excel formula and return the computed result: a quick way to check what a formula " +
       "returns on a few sample values before you put it in a workbook. " +
-      'Pass data as a map of cell references to values (e.g. {"A1": 100, "A2": 200, "B1": "hello"}) ' +
-      'and a formula string (e.g. "SUM(A1:A2)"). The formula is placed in row 1 of the first column right of ' +
-      "your data, so don't reference that cell. A formula that evaluates to an Excel error returns " +
+      'Pass data as a map of cell references to values (e.g. {"A1": 100, "A2": true, "A3": "#N/A", "B1": "hello"}) ' +
+      'and a formula string (e.g. "SUM(A1:A2)"). Values keep their Excel types, as in a workbook: true/false are ' +
+      "logical cells (so SUM, AVERAGE and COUNT skip them in a range), a string that is exactly an error code " +
+      "(#N/A, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #NULL!) is that error, and other strings are text. The " +
+      "formula is placed in row 1 of the first column right of " +
+      'your data, so don\'t reference that cell. Returns {formula, result, type, stats}, type being "number", ' +
+      '"string", "boolean" or "error". A formula that evaluates to an Excel error returns ' +
       'type "error" with the code (#VALUE!, #N/A…) as a normal result; a formula that can\'t be parsed or uses an ' +
       "unsupported function is a tool error. Supports 278 Excel functions: math, financial (NPV, IRR, XIRR, PMT, PRICE, YIELD…), " +
       "statistical distributions, regression, lookup, date/time, text, logical, and dynamic arrays " +
@@ -79,7 +83,10 @@ export const engineTools = {
       data: z
         .record(z.union([z.number(), z.string(), z.boolean()]))
         .optional()
-        .describe('Cell data to populate before evaluating. Keys are cell references like "A1", "B2". Values can be numbers, strings, or booleans.'),
+        .describe(
+          'Cell data to populate before evaluating. Keys are cell references like "A1", "B2". ' +
+            'Values are numbers, booleans (logical TRUE/FALSE), error codes such as "#N/A", or text.',
+        ),
     },
   }),
 
@@ -146,8 +153,8 @@ export const engineTools = {
     description:
       "Add an empty sheet at the end of a session's workbook and make it the active sheet (the one unqualified refs " +
       "like \"B4\" point to). Only for sessions created blank (create_session with no file); on an imported workbook " +
-      "it fails, so work in its existing sheets with set_inputs instead. To retitle a sheet use rename_sheet; " +
-      "sheets can't be deleted with these tools. Returns {sheet_index, sheet_name, sheet_count}.",
+      "it fails, so work in its existing sheets with set_inputs instead. To retitle a sheet use rename_sheet; to " +
+      "remove one use delete_sheet. Returns {sheet_index, sheet_name, sheet_count}.",
     hosted: true,
     inputSchema: { session_id: sessionId, name: z.string().describe("Name for the new sheet tab, e.g. \"Assumptions\"") },
   }),
@@ -169,13 +176,34 @@ export const engineTools = {
     },
   }),
 
+  delete_sheet: spec({
+    title: "Delete sheet",
+    description:
+      "Delete a sheet from a session's workbook, found by its 0-based index (see the sheets list from " +
+      "create_session or inspect_model), the way Excel does: formulas on other sheets that referenced it now read " +
+      "#REF! (Gone!A1 becomes #REF!A1) and evaluate to #REF!, a 3D range ending on it (Jan:Mar!B2) shrinks to the " +
+      "neighbouring sheet, names scoped to it are removed and names that pointed into it refer to #REF!. Sheets " +
+      "after it move down one index, so re-read indexes from the result before the next call. Works on imported " +
+      "and blank workbooks, and recalculates. It can't be undone: restore_session brings back other cells but not " +
+      "the sheet, so export_workbook or save_to_library first if you may need it. Returns {deleted: {sheet_index, " +
+      "sheet_name}, sheets: [{index, name}], active_sheet, formulas_broken (up to 200 cell refs), " +
+      "formulas_broken_count, names_removed, names_broken}. The last sheet, the last visible sheet or an index " +
+      "past the last sheet fails with bad_request and changes nothing. To retitle a sheet use rename_sheet; to " +
+      "empty one without breaking references, overwrite its cells with set_inputs.",
+    hosted: true,
+    inputSchema: {
+      session_id: sessionId,
+      sheet_index: z.number().int().min(0).describe("0-based index of the sheet to delete"),
+    },
+  }),
+
   set_inputs: spec({
     title: "Set inputs",
     description:
       "Write values or formulas into cells of a session and recalculate: the way to run a scenario on a model " +
       "(\"what if Revenue is 1.2M?\"). Keys are defined names (e.g. \"Revenue\") or cell refs (\"B4\" on the active " +
-      "sheet, \"Sheet1!A1\"); values are numbers, booleans (stored as 1/0), text, or a string starting with \"=\" to " +
-      "store a formula. Whatever the target cells held before is overwritten, so call commit_session first if you " +
+      "sheet, \"Sheet1!A1\"); values are numbers, booleans (logical TRUE/FALSE), error codes such as \"#N/A\", text, " +
+      "or a string starting with \"=\" to store a formula. Whatever the target cells held before is overwritten, so call commit_session first if you " +
       "may want restore_session to undo it. The batch is all or nothing: a key that isn't a defined name or valid " +
       "ref, or a formula that can't be stored, fails the call with invalid_input and no cell is written. Returns {applied, recalc, effects}: the cells " +
       "written, recalc stats (with a warning for circular references that didn't converge) and each defined name " +
@@ -262,7 +290,7 @@ export const engineTools = {
     description:
       "Summarize a session's structure: each sheet's index, name and used rows and columns, every defined name with " +
       "its target, the iterative-calc settings, and counts of cells, memory, edit events and commits. Use it to " +
-      "find your way around a workbook before reading or editing it: sheet indexes for rename_sheet and " +
+      "find your way around a workbook before reading or editing it: sheet indexes for rename_sheet, delete_sheet and " +
       "define_variable, names for get_outputs and set_inputs. include_edges adds every formula dependency edge, " +
       "which is large on big models; to follow the chain from one cell use trace_dependencies instead. For errors, " +
       "plugs and broken references use audit_workbook.",
@@ -487,6 +515,7 @@ const toolAnnotations: Record<EngineToolName, ToolAnnotations> = {
   list_sessions: read,
   add_sheet: write(false, false),
   rename_sheet: write(false, true),
+  delete_sheet: write(true, false),
   set_inputs: write(true, true),
   set_calc_settings: write(false, true),
   get_outputs: read,
