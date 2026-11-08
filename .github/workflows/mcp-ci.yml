@@ -1,7 +1,9 @@
 name: mcp-ci
 
 # Tests for the MCP server package (mcp/, published as @basis1/mcp). Runs on
-# PRs that touch it or the SDK it depends on (sdk/).
+# PRs that touch it, the SDK it depends on (sdk/) or the Dockerfile, and on
+# every push to main so the head commit always carries a CI status (directory
+# listings such as Glama read it).
 
 on:
   pull_request:
@@ -10,11 +12,10 @@ on:
       - "mcp/**"
       - ".github/workflows/mcp-ci.yml"
       - ".github/workflows/mcp-release.yml"
+      - "Dockerfile"
+      - ".dockerignore"
   push:
     branches: [main]
-    paths:
-      - "sdk/**"
-      - "mcp/**"
   workflow_call: {}
 
 permissions:
@@ -83,3 +84,20 @@ jobs:
       - name: Pack, install, MCP handshake
         working-directory: mcp
         run: npm run test:pack
+
+  docker:
+    name: docker image (build, tools/list without a key)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t basis1-mcp .
+      - name: Starts without BASIS_API_KEY and lists its tools
+        run: |
+          out=$( { printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'; sleep 5; } | docker run -i --rm basis1-mcp )
+          count=$(printf '%s\n' "$out" | jq -s 'map(select(.id == 2)) | .[0].result.tools | length')
+          echo "tools/list returned $count tools"
+          test "$count" -gt 0
