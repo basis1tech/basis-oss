@@ -19,6 +19,13 @@ npm install @basis1/parse
 BASIS_API_KEY=… npx -y @basis1/mcp
 ```
 
+Or run the MCP server from this repository with Docker:
+
+```sh
+docker build -t basis1-mcp .
+docker run -i --rm -e BASIS_API_KEY=… basis1-mcp
+```
+
 Each package's README covers usage, configuration and what's sent over the network.
 
 ## Development
