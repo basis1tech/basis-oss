@@ -58,7 +58,15 @@ function readBaseUrl(env: Env, errors: string[]): string {
     errors.push("BASIS_BASE_URL must be a plain base URL, without credentials, a query string or a fragment.");
     return DEFAULT_BASE_URL;
   }
-  return url.toString().replace(/\/+$/, "");
+  return trimTrailingSlashes(url.toString());
+}
+
+// Drops trailing slashes. A loop, not /\/+$/: that regex backtracks
+// quadratically on long runs of slashes (CodeQL js/polynomial-redos).
+function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
 }
 
 function readMaxFetchBytes(env: Env, errors: string[]): number {
