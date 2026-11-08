@@ -7,7 +7,7 @@
 #
 # The server starts and lists its tools without BASIS_API_KEY; calling a tool
 # needs a key (free at https://basis1.tech/settings).
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 WORKDIR /app
 
 # The MCP server depends on the SDK through file:../sdk, so build the SDK first.
@@ -21,7 +21,7 @@ RUN cd mcp && npm ci
 COPY mcp/ mcp/
 RUN cd mcp && npm run build && npm prune --omit=dev && cd ../sdk && npm prune --omit=dev
 
-FROM node:22-slim
+FROM node:25-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/sdk/package.json sdk/
