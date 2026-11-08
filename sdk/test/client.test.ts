@@ -510,4 +510,13 @@ describe("other routes", () => {
     await client(fake, { baseUrl: "https://api.test/" }).healthz();
     assert.equal(fake.calls[0].url.href, "https://api.test/healthz");
   });
+
+  test("a long run of trailing slashes is trimmed quickly", async () => {
+    const fake = new FakeFetch().reply(() => new Response("ok"));
+    const started = performance.now();
+    const c = client(fake, { baseUrl: "https://api.test" + "/".repeat(100_000) });
+    assert.ok(performance.now() - started < 100);
+    await c.healthz();
+    assert.equal(fake.calls[0].url.href, "https://api.test/healthz");
+  });
 });

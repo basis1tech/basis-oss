@@ -106,6 +106,14 @@ interface SendInit {
   body?: BodyInit;
 }
 
+// Drops trailing slashes. A loop, not /\/+$/: that regex backtracks
+// quadratically on long runs of slashes (CodeQL js/polynomial-redos).
+function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
 function requireNonNegativeInteger(name: string, value: number): void {
   if (!Number.isInteger(value) || value < 0) {
     throw new TypeError(`${name} must be a non-negative integer, got ${value}`);
@@ -168,7 +176,7 @@ export class Basis {
       throw new TypeError("Basis needs an API key: new Basis({ token: process.env.BASIS_API_KEY })");
     }
     this.token = opts.token;
-    this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(opts.baseUrl ?? DEFAULT_BASE_URL);
     this.pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.retry = {
