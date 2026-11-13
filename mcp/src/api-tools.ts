@@ -21,19 +21,19 @@ export const MAX_JOB_WAIT_SECONDS = 60;
 const JOB_WAIT_POLL_MS = 1000;
 
 const workbookInputShape = {
-  path: z.string().optional().describe("Local filesystem path to an .xlsx file (read on this machine, then uploaded)"),
-  url: z.string().url().optional().describe("URL to fetch the .xlsx file from"),
-  base64: z.string().optional().describe("Base64-encoded .xlsx file bytes"),
+  path: z.string().optional().describe("Local filesystem path to an .xlsx or .csv file (read on this machine, then uploaded)"),
+  url: z.string().url().optional().describe("URL to fetch the .xlsx or .csv file from"),
+  base64: z.string().optional().describe("Base64-encoded .xlsx or .csv file bytes"),
   webhook_url: z.string().url().optional().describe("https URL that gets an HMAC-signed POST with the job's status when the parse finishes"),
 };
 
 const diffInputShape = {
-  before_path: z.string().optional().describe("Local filesystem path to the first (before) .xlsx file"),
-  before_url: z.string().url().optional().describe("URL to fetch the first (before) .xlsx file from"),
-  before_base64: z.string().optional().describe("Base64-encoded bytes of the first (before) .xlsx file"),
-  after_path: z.string().optional().describe("Local filesystem path to the second (after) .xlsx file"),
-  after_url: z.string().url().optional().describe("URL to fetch the second (after) .xlsx file from"),
-  after_base64: z.string().optional().describe("Base64-encoded bytes of the second (after) .xlsx file"),
+  before_path: z.string().optional().describe("Local filesystem path to the first (before) .xlsx or .csv file"),
+  before_url: z.string().url().optional().describe("URL to fetch the first (before) .xlsx or .csv file from"),
+  before_base64: z.string().optional().describe("Base64-encoded bytes of the first (before) .xlsx or .csv file"),
+  after_path: z.string().optional().describe("Local filesystem path to the second (after) .xlsx or .csv file"),
+  after_url: z.string().url().optional().describe("URL to fetch the second (after) .xlsx or .csv file from"),
+  after_base64: z.string().optional().describe("Base64-encoded bytes of the second (after) .xlsx or .csv file"),
   include_format: z.boolean().optional().describe("Report cells whose only change is number format (default true)"),
 };
 
@@ -46,7 +46,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       title: "Parse workbook",
       annotations: apiToolAnnotations.parse_workbook,
       description:
-        "Parse an .xlsx workbook in one call and return its full semantic NDJSON: one JSON record per line " +
+        "Parse an .xlsx workbook (or a .csv/.tsv file, read as one sheet) in one call and return its full semantic NDJSON: one JSON record per line " +
         "(workbook_meta, sheet, cell, edge, image, image_summary, audit), covering every cell's value and formula and " +
         "the formula dependency edges. Use it to read a whole file without opening a session; large files are handed " +
         "to an async job and awaited for you. To start a parse without waiting, use submit_job; to read a few cells " +
@@ -73,7 +73,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       title: "Submit parse job",
       annotations: apiToolAnnotations.submit_job,
       description:
-        "Start an async parse of an .xlsx workbook and return at once with a job handle {job_id, status: " +
+        "Start an async parse of an .xlsx workbook (or a .csv/.tsv file) and return at once with a job handle {job_id, status: " +
         "\"processing\", status_url, stream_url}. Use it instead of parse_workbook for large files or when you don't " +
         "want to wait: call stream_job with wait_seconds to wait for the records (or status_only to just check). Every " +
         "call starts a new job and counts against the API key's parse quota, so don't resubmit a file whose job is " +
@@ -143,7 +143,7 @@ export function registerApiTools(server: McpServer, deps: ApiToolDeps): void {
       title: "Diff workbooks",
       annotations: apiToolAnnotations.diff_workbooks,
       description:
-        "Compare two .xlsx files cell by cell and return the differences as JSON: {summary, added, removed, changed, " +
+        "Compare two .xlsx (or .csv) files cell by cell and return the differences as JSON: {summary, added, removed, changed, " +
         "format_changed}. Cells are matched on (sheet title, cell ref); changed covers value and formula changes, and " +
         "format-only changes are listed separately. Use it to see what changed between two versions of a file, such " +
         "as before and after an edit. For problems inside one workbook use audit_workbook; to undo edits in a session " +
