@@ -158,6 +158,25 @@ describe("inputs", () => {
     }
   });
 
+  test("a .csv path or a text/csv File is sent as text/csv", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "basis-sdk-"));
+    try {
+      const csv = new TextEncoder().encode("amount\n1\n2\n");
+      const file = join(dir, "ledger.csv");
+      writeFileSync(file, csv);
+      const fake = new FakeFetch().reply(ndjson(TWO_RECORDS), ndjson(TWO_RECORDS), ndjson(TWO_RECORDS));
+      await client(fake).parse(file);
+      assert.equal(fake.calls[0].headers.get("content-type"), "text/csv");
+      assert.deepEqual(fake.calls[0].body, csv);
+      await client(fake).parse(new Blob([csv], { type: "text/tab-separated-values" }));
+      assert.equal(fake.calls[1].headers.get("content-type"), "text/tab-separated-values");
+      await client(fake).parse(new Blob([csv], { type: "application/vnd.ms-excel" }));
+      assert.equal(fake.calls[2].headers.get("content-type"), "application/octet-stream");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a missing path rejects with the filesystem error, not a network error", async () => {
     const fake = new FakeFetch();
     await assert.rejects(client(fake).parse(join(tmpdir(), "basis-sdk-does-not-exist.xlsx")), (err: unknown) => {

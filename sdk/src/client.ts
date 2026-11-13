@@ -9,7 +9,7 @@
 import { Deadline, type CallOptions } from "./deadline.ts";
 import { diffRecords, type DiffOptions, type WorkbookDiff } from "./diff.ts";
 import { BasisError, jobFailedError, toBasisError } from "./errors.ts";
-import { toBody, type FileInput } from "./input.ts";
+import { contentTypeFor, toBody, type FileInput } from "./input.ts";
 import { readNdjson } from "./ndjson.ts";
 import type { ExportedWorkbook, ExportSummary, Job, JobStatus, LibrarySaveResult, SheetInfo, StreamRecord } from "./types.ts";
 
@@ -426,7 +426,7 @@ export class Basis {
           method: init.method,
           headers: {
             authorization: `Bearer ${this.token}`,
-            ...(init.body === undefined ? {} : { "content-type": OCTET_STREAM }),
+            ...(init.body === undefined ? {} : { "content-type": contentTypeFor(init.body, OCTET_STREAM) }),
           },
           body: init.body,
           signal: d.signal,

@@ -60,6 +60,12 @@ export type StreamAuditFinding =
       coverage_pct: number;
       errors: number;
       unsupported: number;
+      /** Formulas not evaluated because an input can't be computed. */
+      blocked: number;
+      /** Formula cells left without a value (unsupported or blocked, nothing saved in the file). */
+      uncomputed: number;
+      /** Formula cells not evaluated that keep the value saved in the file. */
+      cached_fallback: number;
       unsupported_breakdown: { reason: string; count: number }[];
       mismatch_samples: {
         sheet: number;
