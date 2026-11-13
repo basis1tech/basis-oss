@@ -1,6 +1,6 @@
 {
   "name": "@basis1/parse",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The Excel engine for AI agents — TypeScript client for the Basis xlsx parsing API: typed records, inline or async job, streaming, webhooks.",
   "license": "Apache-2.0",
   "author": "Basis",

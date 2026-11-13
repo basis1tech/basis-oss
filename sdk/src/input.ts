@@ -8,6 +8,7 @@
 /**
  * A workbook to send: raw bytes (`Uint8Array`, which includes Node's
  * `Buffer`), an `ArrayBuffer`, a `Blob`/`File`, or, on Node only, a path.
+ * An .xlsx/.xlsm or a .csv/.tsv; a CSV is read as a one-sheet workbook.
  */
 export type FileInput = Uint8Array | ArrayBuffer | Blob | string;
 
@@ -35,8 +36,28 @@ function loadNodeFs(): NodeFs {
 
 export type RequestBody = Uint8Array | ArrayBuffer | Blob;
 
+/** The media type a path's extension implies, for the ones the API reads as text. */
+function typeForPath(path: string): string | undefined {
+  if (/\.csv$/i.test(path)) return "text/csv";
+  if (/\.tsv$/i.test(path)) return "text/tab-separated-values";
+  return undefined;
+}
+
 export async function toBody(input: FileInput): Promise<RequestBody> {
   if (typeof input !== "string") return input;
   const fs = loadNodeFs();
-  return fs.openAsBlob(input);
+  const type = typeForPath(input);
+  return type ? fs.openAsBlob(input, { type }) : fs.openAsBlob(input);
+}
+
+const TEXT_TABLE_TYPES = new Set(["text/csv", "text/tab-separated-values"]);
+
+/**
+ * The request content-type for a body: a CSV/TSV Blob (a path ending .csv,
+ * or a `File` the browser typed) says so, so a one-column CSV is read as one;
+ * everything else is sent as raw bytes.
+ */
+export function contentTypeFor(body: unknown, fallback: string): string {
+  const type = typeof Blob !== "undefined" && body instanceof Blob ? body.type.split(";")[0]!.trim().toLowerCase() : "";
+  return TEXT_TABLE_TYPES.has(type) ? type : fallback;
 }
