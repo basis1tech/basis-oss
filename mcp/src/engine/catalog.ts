@@ -70,7 +70,7 @@ export const engineTools = {
       'your data, so don\'t reference that cell. Returns {formula, result, type, stats}, type being "number", ' +
       '"string", "boolean" or "error". A formula that evaluates to an Excel error returns ' +
       'type "error" with the code (#VALUE!, #N/A…) as a normal result; a formula that can\'t be parsed or uses an ' +
-      "unsupported function is a tool error. Supports 278 Excel functions: math, financial (NPV, IRR, XIRR, PMT, PRICE, YIELD…), " +
+      "unsupported function is a tool error. Supports 297 Excel functions: math, financial (NPV, IRR, XIRR, PMT, PRICE, YIELD…), " +
       "statistical distributions, regression, lookup, date/time, text, logical, and dynamic arrays " +
       "(FILTER, SORT, UNIQUE, SEQUENCE, CHOOSECOLS, TAKE, DROP). " +
       "Array expressions evaluate element by element inside SUMPRODUCT, LOOKUP, AGGREGATE, SMALL/LARGE, MATCH and INDEX. " +
@@ -94,7 +94,7 @@ export const engineTools = {
     title: "Create session",
     description:
       "Open a workbook in a session that the other workbook tools then use by session_id: the starting point for " +
-      "reading, editing, recalculating and exporting a model. Pass at most one of path, base64 (raw .xlsx bytes) or " +
+      "reading, editing, recalculating and exporting a model. Pass at most one of path, base64 (raw .xlsx or .csv bytes) or " +
       "url, or none for a blank workbook (the only kind add_sheet can extend). The workbook is recalculated on " +
       "load, including formulas written by other tools without cached values, so opening a file you edited " +
       "elsewhere is how you read back what its formulas compute (get_outputs, get_formula_range); change inputs " +
@@ -109,9 +109,9 @@ export const engineTools = {
       "save_to_library keeps the workbook beyond the session.",
     hosted: true,
     inputSchema: {
-      path: z.string().optional().describe("Local filesystem path to an .xlsx file"),
-      base64: z.string().optional().describe("Base64-encoded .xlsx file bytes"),
-      url: z.string().url().optional().describe("Public https URL to fetch the .xlsx file from (private and local addresses are refused)"),
+      path: z.string().optional().describe("Local filesystem path to an .xlsx or .csv file"),
+      base64: z.string().optional().describe("Base64-encoded .xlsx or .csv file bytes"),
+      url: z.string().url().optional().describe("Public https URL to fetch the .xlsx or .csv file from (private and local addresses are refused)"),
       document_id: z.string().optional().describe("Display label for this session"),
       calc: calcInputShape.optional(),
     },
@@ -399,7 +399,7 @@ export const engineTools = {
   recalc_workbook: spec({
     title: "Recalculate workbook",
     description:
-      "Recalculate an .xlsx file and return it with the computed values saved in every formula cell. Use this " +
+      "Recalculate an .xlsx file (or a .csv, returned as .xlsx) and return it with the computed values saved in every formula cell. Use this " +
       "after you create or edit a workbook with openpyxl or any other library that writes formulas without " +
       "results: those files have no cached values, so pandas, openpyxl (data_only=True) and other readers " +
       "see empty cells until the file is recalculated. Replaces running LibreOffice recalc.py. Returns the " +
@@ -413,9 +413,9 @@ export const engineTools = {
       "Pass output_path to save the result on this machine (the same path as the input, with overwrite: true, recalculates a file in place).",
     hosted: true,
     inputSchema: {
-      path: z.string().optional().describe("Local filesystem path to an .xlsx file"),
-      base64: z.string().optional().describe("Base64-encoded .xlsx file bytes"),
-      url: z.string().url().optional().describe("Public https URL to fetch the .xlsx file from (private and local addresses are refused)"),
+      path: z.string().optional().describe("Local filesystem path to an .xlsx or .csv file"),
+      base64: z.string().optional().describe("Base64-encoded .xlsx or .csv file bytes"),
+      url: z.string().url().optional().describe("Public https URL to fetch the .xlsx or .csv file from (private and local addresses are refused)"),
       filename: z.string().optional().describe("Name for the returned file (defaults to workbook.xlsx)"),
     },
     bridgeInput: outputPath,

@@ -120,7 +120,7 @@ Workbook inputs accept exactly one of `path` (a file on your computer), `url` or
 
 **Formulas**
 
-- `evaluate_formula`: evaluates one Excel formula against cell values you pass, for example `{"formula": "NPV(0.08,A1:A5)", "data": {"A1": 100, ...}}`. Values keep their Excel types: `true`/`false` are logical cells and a string such as `"#N/A"` is that error, so `SUM`, `AVERAGE` and `COUNT` treat them as a workbook would. Supports 278 Excel functions, including financial, statistical, lookup and dynamic-array functions.
+- `evaluate_formula`: evaluates one Excel formula against cell values you pass, for example `{"formula": "NPV(0.08,A1:A5)", "data": {"A1": 100, ...}}`. Values keep their Excel types: `true`/`false` are logical cells and a string such as `"#N/A"` is that error, so `SUM`, `AVERAGE` and `COUNT` treat them as a workbook would. Supports 297 Excel functions, including financial, statistical, lookup and dynamic-array functions.
 
 **Recalculating a file**
 
